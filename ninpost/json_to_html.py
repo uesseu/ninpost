@@ -7,7 +7,7 @@ header = '''
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>4.html</title>
+  <title>ninpost</title>
   <link rel="stylesheet" type="text/css" href="main.css">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
