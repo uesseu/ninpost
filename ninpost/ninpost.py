@@ -1,30 +1,57 @@
 import sys
-import tkinter as tk
-import tkinter.filedialog as filedialog
 from typing import Optional, Tuple
 from .csv_to_json import SpreadSheet
 from .json_to_html import generate_html
-from .css import css
 from pathlib import Path
 import json
 import tomllib
 from argparse import ArgumentParser
 from subprocess import run
-parser = ArgumentParser()
-parser.add_argument('address', nargs='?')
-parser.add_argument('-c', '--config', default='config.toml')
-parser.add_argument('-k', '--apikey', default='')
+import tkinter as tk
+import tkinter.filedialog as filedialog
+from subprocess import run
+
+parser = ArgumentParser(
+    prog='ninpost',
+    description='vimキーバインドの年賀状の宛名印刷ソフト。CSVとかJSONとかから宛名を作って、そこから宛名を印刷するhtmlファイルを作ります。'
+)
+
+parser.add_argument('address', nargs='*')
+parser.add_argument(
+    '-c', '--config', default='config.toml',
+    help='設定ファイルの場所'
+)
+parser.add_argument(
+    '-g', '--gui', action='store_true',
+    help='GUIで起動する。'
+)
+parser.add_argument(
+    '-b', '--browser', action='store_true',
+    help='ブラウザを起動する。もし-oが"-"なら無効になる。'
+)
+parser.add_argument(
+    '-o', '--output',
+    help='出力するファイル名。もし"-"なら標準出力に出力する。-bが有効ならそれを無効にする。',
+    default='out.html'
+)
+parser.add_argument(
+    '-i', '--input', action='store_true',
+    help='標準入力を使う場合。',
+)
 args = parser.parse_args()
+
+
+if not args.address:
+    parser.print_help()
+
 
 def init():
     path = Path('.')
     with open(path / 'config.toml', 'w') as fp:
-        fp.write('''dirname = 'output'
-browser = 'firefox'
+        fp.write('''browser = 'firefox'
 address = '○○市○○1丁目0-0'
 myPost = '0000000'
 myName = '葉書 太郎'
-apikey = ''
 ''')
     with open(path / 'address.csv', 'w') as fp:
         fp.write('''"post","address","familyName","name","title","name","title","name","title","relation","content","prompt","enable"
@@ -35,7 +62,6 @@ if (not Path('address.csv').exists()) and (not Path('config.toml').exists()):
 
 with open(args.config, 'rb') as fp:
     config = tomllib.load(fp)
-apikey = args.apikey if args.apikey else config['apikey']
 
 def browse_file(
     title: str = "Select a file",
@@ -67,19 +93,12 @@ def browse_file(
             pass
     return path
 
-def make_html(path, key=''):
-    spreadsheet = SpreadSheet(path).as_dict()
-    num = len([j for j in spreadsheet if j["enable"]=='1'])
-    res = [generate_html(j, config, num, key=key) for j in spreadsheet if j["enable"]=='1']
-    dirpath = Path(config['dirname'])
-    for num, html in enumerate(res):
-        (dirpath / f'{num}.html').write_text(html)
-    (dirpath / 'main.css').write_text(css)
-    dirpath = Path(config['dirname'])
-    run([config['browser'], dirpath / '0.html'])
+def make_html(path) -> str:
+    spreadsheet = [SpreadSheet(p).as_dict() for p in path]
+    return generate_html(spreadsheet, config)
 
 class App:
-    def __init__(self, master: tk.Tk):
+    def __init__(self, master: 'tk.Tk'):
         self.master = master
         master.title("NinPost")
         self.label = tk.Label(master, text="住所録を開いてください")
@@ -97,19 +116,19 @@ class App:
             self.label.config(text=f"はがきをつくるよ！")
         else:
             self.label.config(text="No file selected")
-        make_html(path, key=apikey)
+        make_html(path)
 
 
 def main():
-    dirpath = Path(config['dirname'])
-    if dirpath.exists():
-        for p in dirpath.glob('*'):
-            p.unlink()
-        dirpath.rmdir()
-    dirpath.mkdir()
     if args.address:
-        make_html(args.address, key=apikey)
-    else:
+        result = make_html(args.address)
+        if args.output.strip() == '-':
+            print(result)
+        else:
+            Path(args.output).write_text(result)
+            if args.browser:
+                run([config['browser'], args.output])
+    elif args.gui:
         root = tk.Tk()
         app = App(root)
         root.mainloop()
